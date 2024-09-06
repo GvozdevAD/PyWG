@@ -2,8 +2,10 @@ import configparser
 
 from pathlib import Path
 
-from .datacls import ConfigInfo
+from .datacls import InterfaceInfo
 from .key_gen import KeyGenWG
+
+from .exceptions import FileConfNotFound
 
 class Interface:
     def __init__(
@@ -20,10 +22,10 @@ class Interface:
         self.interface_name = interface_name
         self.config_path = config_path
         self.check_config = (
-            self.config_path / self.interface_name
+            self.config_path / f"{self.interface_name}.conf"
         ).exists()
 
-    def create_config(
+    def create_interface(
             self,
             address: str = "10.0.0.1/24",
             port: str = 51820,
@@ -32,11 +34,12 @@ class Interface:
                 " iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
             post_down: str = f"iptables -D FORWARD -i %i -j ACCEPT;"+
                 " iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE"
-    ) -> ConfigInfo:
+    ) -> InterfaceInfo:
         """
         Создание и запись конфигурационного файла для интерфейса WireGuard.
 
-        Если файл конфигурации уже существует, он будет прочитан и возвращен.
+        Если файл конфигурации уже существует, он будет прочитан и 
+        возвращена информация о интерфейсе.
         Если приватный ключ не предоставлен, он будет сгенерирован и сохранен.
 
         :param address: IP-адрес и маска подсети для интерфейса WireGuard.
@@ -74,7 +77,7 @@ class Interface:
         with open(self.config_path / f"{self.interface_name}.conf", "w") as configfile:
             config_override.write(configfile)
         
-        return ConfigInfo(
+        return InterfaceInfo(
             self.config_path / f"{self.interface_name}.conf",
             address,
             post_up, 
@@ -83,20 +86,23 @@ class Interface:
             keys.private
         )
         
-    def read_config(
+    def read_interface(
             self,
-    ) -> ConfigInfo:
+    ) -> InterfaceInfo:
         """
-        Чтение конфигурационного файла и возврат информации о конфигурации.
+        Чтение конфигурационного файла и возврат информации о интерфейсе.
         
-        :return: Объект ConfigInfo с информацией о конфигурации.
+        :return: Объект InterfaceInfo с информацией о интерфейсе.
         """
+        if not self.check_config:
+            raise FileConfNotFound("Файл конфигурации не найден!")
         config = configparser.RawConfigParser()
+        config.optionxform = str
         config.read(
             self.config_path/f"{self.interface_name}.conf"
         )
         interface = config["Interface"]
-        return ConfigInfo(
+        return InterfaceInfo(
             self.config_path/f"{self.interface_name}.conf",
             **interface
         )
