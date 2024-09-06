@@ -47,26 +47,26 @@ class KeyGenWG:
     def save_keys_to_file(
         keys: Keys, 
         title: str,
-        path_to_dit: Path = Path("/","etc", "wireguard", "keys")
+        path_to_dir: Path = Path("/","etc", "wireguard", "keys")
     ) -> tuple[Path, Path]:
         """
         Метод сохраняет сгенерированные ключи в файлы на диске. 
         Названия файлов можно настроить с помощью параметра title, 
-        а директория для сохранения ключей задается параметром path_to_dit. 
+        а директория для сохранения ключей задается параметром path_to_dir. 
         Метод возвращает кортеж с путями к созданным файлам.
 
         :param keys: Объект класса Keys, содержащий приватный и публичный ключи
         :param title: Строка, используемая для формирования названий файлов 
             (например, "wg0"). Если title не задан, файлы будут названы 
             как privatekey и publickey
-        param path_to_dit: Путь к директории, в которой будут сохранены файлы. 
+        param path_to_dir: Путь к директории, в которой будут сохранены файлы. 
             По умолчанию — /etc/wireguard/keys
         """
         name_privatekey = f"{title}_privatekey" if title else "privatekey"
-        with open(path_to_dit / name_privatekey, "w") as file:
+        with open(path_to_dir / name_privatekey, "w") as file:
             file.write(keys.private)
         
         name_publickey = f"{title}_publickey" if title else "publickey"
-        with open(path_to_dit / name_publickey, "w") as file:
+        with open(path_to_dir / name_publickey, "w") as file:
                     file.write(keys.public)
-        return path_to_dit / name_publickey, path_to_dit / name_privatekey
+        return path_to_dir / name_publickey, path_to_dir / name_privatekey
