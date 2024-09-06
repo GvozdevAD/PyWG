@@ -1,54 +1,102 @@
 import configparser
-import subprocess
 
 from pathlib import Path
+
+from .datacls import ConfigInfo
+from .key_gen import KeyGenWG
 
 class Interface:
     def __init__(
             self,
-            interface_name: str,
-            config_path: Path =  Path("etc","wireguard")
+            interface_name: str = "wg0",
+            config_path: Path =  Path("/","etc","wireguard")
     ) -> None:
+        """
+        Инициализация объекта Interface.
+        
+        :param interface_name: Название интерфейса WireGuard, по умолчанию "wg0".
+        :param config_path: Путь к директории для конфигурационных файлов, по умолчанию "/etc/wireguard".
+        """
         self.interface_name = interface_name
         self.config_path = config_path
-        self.config = configparser.ConfigParser(
-            allow_no_value=True
-        )
-        self.check_config = None
-
-    def check_config(self) -> bool:
-        """
-        """
-        if not (self.congig_path / self.interface_name).exists:
-            """
-            """
-            return False
-        return True
+        self.check_config = (
+            self.config_path / self.interface_name
+        ).exists()
 
     def create_config(
             self,
-            addres: str = "10.0.0.1/24",
+            address: str = "10.0.0.1/24",
             port: str = 51820,
             private_key: str = None,
-            post_up: str = "iptables -A FORWARD -i %i -j ACCEPT;"\
+            post_up: str = f"iptables -A FORWARD -i %i -j ACCEPT;"+
                 " iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-            post_down: str = "iptables -D FORWARD -i %i -j ACCEPT;"\
+            post_down: str = f"iptables -D FORWARD -i %i -j ACCEPT;"+
                 " iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE"
-    ):
+    ) -> ConfigInfo:
         """
-        [Interface]
-        Address = 10.0.0.1/24
-        PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-        PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
-        ListenPort = 51820
-        PrivateKey = <SERVER-PRIV-KEY>
+        Создание и запись конфигурационного файла для интерфейса WireGuard.
+
+        Если файл конфигурации уже существует, он будет прочитан и возвращен.
+        Если приватный ключ не предоставлен, он будет сгенерирован и сохранен.
+
+        :param address: IP-адрес и маска подсети для интерфейса WireGuard.
+        :param port: Порт, на котором будет слушать интерфейс.
+        :param private_key: Приватный ключ для интерфейса WireGuard. Если None, будет сгенерирован новый.
+        :param post_up: Команды для выполнения после запуска интерфейса.
+        :param post_down: Команды для выполнения при остановке интерфейса.
+        :return: Объект ConfigInfo с информацией о конфигурации.
         """
-        pass
+        if self.check_config:
+            return self.read_config()
+        
+        config_override = configparser.RawConfigParser()
+        config_override.optionxform = str
+        if not private_key:
+            keys = KeyGenWG.generate_keys()
+            
+            if not (self.config_path / "keys").exists():
+                (self.config_path / "keys").mkdir()
+            
+            KeyGenWG.save_keys_to_file(
+                keys, 
+                self.interface_name, 
+                self.config_path / "keys"
+            )
+            private_key = keys.private
+
+        config_override["Interface"] = {
+            "Address": address,
+            "PostUp": post_up,
+            "PostDown": post_down,
+            "ListenPort": port,
+            "PrivateKey": private_key,
+        }
+        with open(self.config_path / f"{self.interface_name}.conf", "w") as configfile:
+            config_override.write(configfile)
+        
+        return ConfigInfo(
+            self.config_path / f"{self.interface_name}.conf",
+            address,
+            post_up, 
+            post_down,
+            port, 
+            keys.private
+        )
         
     def read_config(
             self,
-    ):
+    ) -> ConfigInfo:
         """
+        Чтение конфигурационного файла и возврат информации о конфигурации.
+        
+        :return: Объект ConfigInfo с информацией о конфигурации.
         """
-    
-    
+        config = configparser.RawConfigParser()
+        config.read(
+            self.config_path/f"{self.interface_name}.conf"
+        )
+        interface = config["Interface"]
+        return ConfigInfo(
+            self.config_path/f"{self.interface_name}.conf",
+            **interface
+        )
